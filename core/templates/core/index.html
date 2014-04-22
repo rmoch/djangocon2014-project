@@ -1,0 +1,183 @@
+{% extends "core/base.html" %}
+{% load leaflet_tags %}
+
+{% block extendjs %}
+    {% leaflet_js %}
+    <script src="http://openweathermap.org/js/leaflet-layer.js"></script>
+
+{% endblock %}
+
+
+{% block extendcss %}
+    {% leaflet_css %}
+    <style>
+        #map {
+            width: auto;
+            height: 800px;
+        }
+    </style>
+{% endblock %}
+
+    {% block content %}
+
+        <div id="map" class="leaflet-container-default"></div>
+
+    {% endblock %}
+
+<script type="text/javascript">
+
+{% block js %}
+(function () {
+    var map;
+
+    baseLayer = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: "\u00a9 <a href=\"http://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors",
+                maxZoom: 18,
+                opacity: 1,
+            })
+
+
+
+    map = L.map('map', {
+        center: [43.079, 5.7858], //[45.0, 6.0],
+        zoom: 17,
+        maxzoom: 18,
+        minzoom: 0,
+        minimap: true,
+        scale: 'metric',
+        layers: [baseLayer]
+    });
+
+    openWeatherMapLayers = {
+        'Quantity of precipitation': 'precipitation',
+        'Rain precipitation': 'rain',
+        'Snow precipitation': 'snow',
+        'Cloud Cover': 'clouds',
+        'Sea Level Pressure': 'pressure',
+        'Sea Level Pressure contour': 'pressure_cntr',
+        'Temperature': 'temp',
+        'Wind speed': 'wind',
+    }
+    // initialize OpenWeatherMap menu
+    var $menu = $('#open-weather-map');
+    var overlays = {};
+
+    for (key in openWeatherMapLayers) {
+
+            layer = L.tileLayer('http://{s}.tile.openweathermap.org/map/' + openWeatherMapLayers[key] + '/{z}/{x}/{y}.png', {
+                attribution: 'Map data © OpenWeatherMap',
+                maxZoom: 18,
+                opacity: 0.5,
+            });
+        overlays[key] = layer;
+
+    }
+    var seamarks = L.tileLayer('http://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+                attribution: '',
+                maxZoom: 18,
+                opacity: 1,
+            }).addTo(map);
+    overlays["Seam marks"] = seamarks;
+
+
+    var city_meteo = new OsmJs.Weather.LeafletLayer({lang: 'en'});
+    overlays["City meteo"] = city_meteo;
+
+
+    var deepshade = L.tileLayer.wms('http://osm.franken.de:8080/geoserver/gwc/service/wms', {
+            layers: 'gebco_new',   // old version gebco:deepshade
+            format: 'image/png',
+            attribution: "Weather data © 2012 IEM Nexrad"
+             });
+    overlays["Marine profile"] = deepshade;
+
+
+    L.control.layers(null, overlays).addTo(map);
+
+    // http://build-failed.blogspot.pt/2012/02/leaflet-and-html5.html
+    var points = [
+        { lat: 40.723697, lon: -8.468368 },
+        { lat: 37.829701, lon: -7.943891 },
+        { lat: 41.552968, lon: -8.309867 },
+        { lat: 41.509392, lon: -6.859326 },
+        { lat: 39.946475, lon: -7.50164 },
+        { lat: 40.204391, lon: -8.33593 },
+        { lat: 38.603914, lon: -7.841794 },
+        { lat: 37.243653, lon: -8.131754 },
+        { lat: 40.641346, lon: -7.229598 },
+        { lat: 39.717187, lon: -8.775258 },
+        { lat: 38.998077, lon: -9.163589 },
+        { lat: 39.190066, lon: -7.620413 },
+        { lat: 41.224799, lon: -8.352842 },
+        { lat: 39.293463, lon: -8.477529 },
+        { lat: 38.318513, lon: -8.653012 },
+        { lat: 41.877865, lon: -8.507078 },
+        { lat: 41.555004, lon: -7.631723 },
+        { lat: 40.798902, lon: -7.870874 }];
+
+    var tiles = new L.TileLayer.Canvas();
+
+    tiles.drawTile = function (canvas, tile, zoom) {
+        var context = canvas.getContext('2d');
+
+        // circle radius
+        var radius = 12;
+
+        var tileSize = this.options.tileSize;
+        console.log(tile);
+        console.log(zoom);
+        for (var i = 0; i < points.length; i++) {
+
+            var point = new L.LatLng(points[i].lat, points[i].lon);
+
+            // start coordinates to tile pixels
+            var start = tile.multiplyBy(tileSize);
+
+            // actual coordinates to tile pixel
+            var p = map.project(point);
+
+            // point to draw
+            var x = Math.round(p.x - start.x);
+            var y = Math.round(p.y - start.y);
+
+            // Circle
+            context.beginPath();
+            context.arc(x, y, radius, 0, 2 * Math.PI, false);
+
+            // Fill (Gradient)
+            var grd = context.createRadialGradient(x, y, 5, x, y, radius);
+            grd.addColorStop(0, "#8ED6FF");
+            grd.addColorStop(1, "#004CB3");
+            context.fillStyle = grd;
+
+            // Shadow
+            context.shadowColor = "#666666";
+            context.shadowBlur = 5;
+            context.shadowOffsetX = 7;
+            context.shadowOffsetY = 7;
+            context.fill()
+
+            context.lineWidth = 2;
+            context.strokeStyle = "black";
+            context.stroke();
+
+            // Text
+            context.lineWidth = 1;
+            context.fillStyle = "#000000";
+            context.lineStyle = "#000000";
+            context.font = "12px sans-serif";
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillText(i + 1, x, y);
+
+        }
+
+    };
+
+    map.addLayer(tiles);
+
+
+
+
+})();
+{% endblock %}
