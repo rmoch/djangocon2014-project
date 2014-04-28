@@ -27,8 +27,9 @@
 <script type="text/javascript">
 
 {% block js %}
-(function () {
     var map;
+
+(function () {
 
     baseLayer = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: "\u00a9 <a href=\"http://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors",
@@ -40,7 +41,7 @@
 
     map = L.map('map', {
         center: [43.079, 5.7858], //[45.0, 6.0],
-        zoom: 17,
+        zoom: 16,
         maxzoom: 18,
         minzoom: 0,
         minimap: true,
@@ -92,92 +93,85 @@
     overlays["Marine profile"] = deepshade;
 
 
-    L.control.layers(null, overlays).addTo(map);
+    var layerControl = L.control.layers(null, overlays).addTo(map);
 
-    // http://build-failed.blogspot.pt/2012/02/leaflet-and-html5.html
-    var points = [
-        { lat: 40.723697, lon: -8.468368 },
-        { lat: 37.829701, lon: -7.943891 },
-        { lat: 41.552968, lon: -8.309867 },
-        { lat: 41.509392, lon: -6.859326 },
-        { lat: 39.946475, lon: -7.50164 },
-        { lat: 40.204391, lon: -8.33593 },
-        { lat: 38.603914, lon: -7.841794 },
-        { lat: 37.243653, lon: -8.131754 },
-        { lat: 40.641346, lon: -7.229598 },
-        { lat: 39.717187, lon: -8.775258 },
-        { lat: 38.998077, lon: -9.163589 },
-        { lat: 39.190066, lon: -7.620413 },
-        { lat: 41.224799, lon: -8.352842 },
-        { lat: 39.293463, lon: -8.477529 },
-        { lat: 38.318513, lon: -8.653012 },
-        { lat: 41.877865, lon: -8.507078 },
-        { lat: 41.555004, lon: -7.631723 },
-        { lat: 40.798902, lon: -7.870874 }];
 
-    var tiles = new L.TileLayer.Canvas();
+    function calculateEndPoint(latlng, dist, degree) {
+        /*
+         * http://www.codeguru.com/cpp/cpp/algorithms/article.php/c5115/Geographic-Distance-and-Azimuth-Calculations.htm
+         */
+        var distance = dist * 0.001; //config.stretchFactor;
+        var R = 6378.137, // earth radius in kmmeters
+        d2r = L.LatLng.DEG_TO_RAD, // degree 2 radius
+        r2d = L.LatLng.RAD_TO_DEG, //
 
-    tiles.drawTile = function (canvas, tile, zoom) {
-        var context = canvas.getContext('2d');
+        bearing = degree * d2r;
+        distance = distance / R;
+        var a = Math.acos(Math.cos(distance) *
+                Math.cos((90 - latlng.lat) * d2r) +
+                Math.sin((90 - latlng.lat) * d2r) *
+                Math.sin(distance) *
+                Math.cos(bearing));
+        var B = Math.asin(Math.sin(distance) * Math.sin(bearing) / Math.sin(a));
+        return new L.LatLng(90 - a * r2d, B * r2d + latlng.lng);
+    }
 
-        // circle radius
-        var radius = 12;
+    function calculateArrowArray(latlng, degree) {
+        // calculates the Array for the arrow
 
-        var tileSize = this.options.tileSize;
-        console.log(tile);
-        console.log(zoom);
-        for (var i = 0; i < points.length; i++) {
+        // latlng is the position, where the arrow is added
+        // degree is the degree of the line
+        var arrowheadLength = 8;
+        var arrowheadDegree = 14;
+        var arrowheadClosingLine = true;
 
-            var point = new L.LatLng(points[i].lat, points[i].lon);
-
-            // start coordinates to tile pixels
-            var start = tile.multiplyBy(tileSize);
-
-            // actual coordinates to tile pixel
-            var p = map.project(point);
-
-            // point to draw
-            var x = Math.round(p.x - start.x);
-            var y = Math.round(p.y - start.y);
-
-            // Circle
-            context.beginPath();
-            context.arc(x, y, radius, 0, 2 * Math.PI, false);
-
-            // Fill (Gradient)
-            var grd = context.createRadialGradient(x, y, 5, x, y, radius);
-            grd.addColorStop(0, "#8ED6FF");
-            grd.addColorStop(1, "#004CB3");
-            context.fillStyle = grd;
-
-            // Shadow
-            context.shadowColor = "#666666";
-            context.shadowBlur = 5;
-            context.shadowOffsetX = 7;
-            context.shadowOffsetY = 7;
-            context.fill()
-
-            context.lineWidth = 2;
-            context.strokeStyle = "black";
-            context.stroke();
-
-            // Text
-            context.lineWidth = 1;
-            context.fillStyle = "#000000";
-            context.lineStyle = "#000000";
-            context.font = "12px sans-serif";
-            context.textAlign = "center";
-            context.textBaseline = "middle";
-            context.fillText(i + 1, x, y);
-
+        if (latlng.length !== undefined) {
+            latlng = new L.LatLng(latlng);
         }
+        var firstEdge = calculateEndPoint(latlng, arrowheadLength, degree -
+                arrowheadDegree);
+        var arr = [ firstEdge, latlng,
+                calculateEndPoint(latlng, arrowheadLength, degree + arrowheadDegree) ];
 
+        if (arrowheadClosingLine) {
+            arr.push(firstEdge);
+        }
+        return arr;
+    }
+
+    var pointPathOption = {
+        stroke : false,
+        fillOpacity: 0.8,
     };
 
-    map.addLayer(tiles);
+    function ais(event) {
+        console.log('ais')
+        var b = map.getBounds();
+        var s = b._southWest.lng + ',' + b._southWest.lat  + ',' +  b._northEast.lng + ',' + b._northEast.lat;
 
+        $.get('/aisproxy/?bbox=' + s ,
+            function(response){
+            data = []
+            var vessels = response['POSITIONS']['V_POS']
+            for (idx in vessels) {
+                // H: course,
+                // console.log(vessels[idx]['@N'])
+                L.circle([vessels[idx]['@LAT'], vessels[idx]['@LON']], 20, {'weight': 2}).addTo(map);
 
+                var startPoint = new L.LatLng(vessels[idx]['@LAT'], vessels[idx]['@LON']);
+                var degree = vessels[idx]['@H'];
+                var line = [ startPoint, calculateEndPoint(startPoint, 50, degree) ];
+                var arrow = calculateArrowArray(line[1], degree);
 
+                poly = new L.MultiPolyline([line, arrow], {'weight': 2});
+                poly.addTo(map);
+            }
+        });
+
+    }
+
+    map.on('viewreset', ais);
+    ais();
 
 })();
 {% endblock %}

@@ -7,6 +7,6 @@ admin.autodiscover()
 
 urlpatterns = patterns('core.views',
     url(r'^$', 'index', name='index'),
-    url(r'^ais/$', 'ais', name='ais'),
+    url(r'^aisproxy/$', 'aisproxy', name='aisproxy'),
 
 )
