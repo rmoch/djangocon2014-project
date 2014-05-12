@@ -21,6 +21,7 @@
     {% block content %}
 
         <div id="map" class="leaflet-container-default"></div>
+          <input type="checkbox" id="ais">AIS Tracking
 
     {% endblock %}
 
@@ -95,7 +96,7 @@
 
     var layerControl = L.control.layers(null, overlays).addTo(map);
 
-
+    // inspired from https://github.com/meteotest/leaflet-arrows
     function calculateEndPoint(latlng, dist, degree) {
         /*
          * http://www.codeguru.com/cpp/cpp/algorithms/article.php/c5115/Geographic-Distance-and-Azimuth-Calculations.htm
@@ -143,33 +144,41 @@
         stroke : false,
         fillOpacity: 0.8,
     };
-
+    var polys = []
     function ais(event) {
-        console.log('ais')
-        var b = map.getBounds();
-        var s = b._southWest.lng + ',' + b._southWest.lat  + ',' +  b._northEast.lng + ',' + b._northEast.lat;
+        if ($('#ais:checked').length > 0) {
+            var b = map.getBounds();
+            var s = b._southWest.lng + ',' + b._southWest.lat  + ',' +  b._northEast.lng + ',' + b._northEast.lat;
 
-        $.get('/aisproxy/?bbox=' + s ,
-            function(response){
-            data = []
-            var vessels = response['POSITIONS']['V_POS']
-            for (idx in vessels) {
-                // H: course,
-                // console.log(vessels[idx]['@N'])
-                L.circle([vessels[idx]['@LAT'], vessels[idx]['@LON']], 20, {'weight': 2}).addTo(map);
+            $.get('/aisproxy/?bbox=' + s ,
+                function(response){
+                data = []
+                var vessels = response['POSITIONS']['V_POS']
+                for (idx in vessels) {
+                    // H: course,
+                    // console.log(vessels[idx]['@N'])
+                    poly = L.circle([vessels[idx]['@LAT'], vessels[idx]['@LON']], 20, {'weight': 2}).addTo(map);
+                    polys.push(poly);
 
-                var startPoint = new L.LatLng(vessels[idx]['@LAT'], vessels[idx]['@LON']);
-                var degree = vessels[idx]['@H'];
-                var line = [ startPoint, calculateEndPoint(startPoint, 50, degree) ];
-                var arrow = calculateArrowArray(line[1], degree);
+                    var startPoint = new L.LatLng(vessels[idx]['@LAT'], vessels[idx]['@LON']);
+                    var degree = vessels[idx]['@H'];
+                    var line = [ startPoint, calculateEndPoint(startPoint, 50, degree) ];
+                    var arrow = calculateArrowArray(line[1], degree);
 
-                poly = new L.MultiPolyline([line, arrow], {'weight': 2});
-                poly.addTo(map);
-            }
-        });
+                    poly = new L.MultiPolyline([line, arrow], {'weight': 2});
+                    poly.addTo(map);
+                    polys.push(poly);
+                }
+
+            });
+        } else {
+            $.each(polys, function(idx, item) {
+                map.removeLayer(item)
+            });
+        }
 
     }
-
+    $('#ais').on('click', ais);
     map.on('viewreset', ais);
     ais();
 

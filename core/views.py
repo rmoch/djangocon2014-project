@@ -18,5 +18,4 @@ def aisproxy(request):
     bbox = request.GET['bbox']
     response = requests.get('http://map.openseamap.org/api/getAIS.php?bbox=' + bbox)
     data = xmltodict.parse(response.content)
-    print data
     return HttpResponse(json.dumps(data), content_type='application/json; charset=utf-8')
